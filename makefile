@@ -1,60 +1,76 @@
-# ==== Configuración =====
-PROJECT := main
+SHELL := /bin/sh
 
-# Si no definís CC afuera, usa cc. Podés exportar CC=gcc o CC=clang
-CC ?= cc
-
-CSTD := c99
-CPPFLAGS ?= -Iinclude                # rutas a headers
-CFLAGS   ?= -std=$(CSTD) -Wall -Wextra -Wpedantic -O2
+# ==== User configuration =====================================================
+CC       ?= gcc
+CSTD     ?= c11
+CFLAGS   ?= -std=$(CSTD) -Wall -Wextra -Wpedantic -g
+CPPFLAGS ?=
 LDFLAGS  ?=
-LDLIBS   ?=                          # ej: -lm
+LDLIBS   ?=
 
-# ==== Fuentes / Objetos / Deps ====
-SRC  := $(wildcard src/*.c)
-OBJ  := $(SRC:src/%.c=build/%.o)
-DEP  := $(OBJ:.o=.d)
+# ==== Internal configuration =================================================
+BUILD_DIR := build
+OBJ_DIR   := $(BUILD_DIR)/obj
+BIN_DIR   := $(BUILD_DIR)/bin
 
-# ==== Targets por defecto ====
-.PHONY: all clean run debug info test
+# Header search paths (all project directories except the build folder)
+INC_DIRS_RAW != find . -type d -not -path './$(BUILD_DIR)*' -not -path './.*'
+INC_DIRS     := $(patsubst ./%,%,$(INC_DIRS_RAW))
+CPPFLAGS     += $(addprefix -I,$(INC_DIRS))
 
-all: $(PROJECT)
+# Gather module sources (translation units without a main function)
+MODULE_SRC_RAW != sh -c 'find . -type f -name "*.c" -not -path "./$(BUILD_DIR)/*" -not -path "./.*" -print | while read -r file; do if ! grep -Eq "int[[:space:]]*main" "$$file"; then printf "%s\n" "$$file"; fi; done'
+MODULE_SRC := $(patsubst ./%,%,$(MODULE_SRC_RAW))
+MODULE_OBJ := $(MODULE_SRC:%.c=$(OBJ_DIR)/%.o)
 
-# Carpeta build (se crea una vez)
-build:
-	@mkdir -p build
+.SECONDARY:
 
-# Link final
-$(PROJECT): build $(OBJ)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LDLIBS)
+# Dependency files generated with -MMD -MP
+DEPS := $(MODULE_OBJ:.o=.d)
+DEPS += $(shell find $(OBJ_DIR) -type f -name '*.d' 2>/dev/null)
 
-# Regla de compilación con deps automáticas (-MMD -MP)
-build/%.o: src/%.c | build
+# Default target ----------------------------------------------------------------
+.DEFAULT_GOAL := help
+
+.PHONY: help
+help:
+	@echo "Usage:"
+	@echo "  make path/to/file.c  # build and run the given translation unit"
+	@echo "  make modules         # pre-build every reusable module"
+	@echo "  make clean           # delete the build directory"
+
+# Build every reusable module ---------------------------------------------------
+.PHONY: modules
+modules: $(MODULE_OBJ)
+
+# Generic compilation rule ------------------------------------------------------
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-# Incluir archivos .d generados (no falla si no existen todavía)
--include $(DEP)
+# Link rule: requested program + modules ---------------------------------------
+$(BIN_DIR)/%: $(OBJ_DIR)/%.o $(MODULE_OBJ)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-# === Utilitarios ===
-run: $(PROJECT)
-	./$(PROJECT)
+# Allow `make something.c` ------------------------------------------------------
+REQUESTED_SOURCES := $(filter %.c,$(MAKECMDGOALS))
+RUN_PROG = $(patsubst %.c,%,$(patsubst ./%,%,$(SRC)))
 
-debug: CFLAGS += -g -O0
-debug: clean $(PROJECT)
+.PHONY: $(REQUESTED_SOURCES)
+$(REQUESTED_SOURCES):
+	@$(MAKE) --no-print-directory __run SRC=$@
 
-info:
-	@echo "CC       = $(CC)"
-	@echo "CSTD     = $(CSTD)"
-	@echo "CPPFLAGS = $(CPPFLAGS)"
-	@echo "CFLAGS   = $(CFLAGS)"
-	@echo "LDFLAGS  = $(LDFLAGS)"
-	@echo "LDLIBS   = $(LDLIBS)"
-	@echo "SRC      = $(SRC)"
-	@echo "OBJ      = $(OBJ)"
+# Internal runner ---------------------------------------------------------------
+.PHONY: __run
+__run: $(BIN_DIR)/$(RUN_PROG)
+	@echo "\n>> Running $(patsubst ./%,%,$(SRC))"
+	./$(BIN_DIR)/$(RUN_PROG)
 
-test: $(PROJECT)
-	@echo ">> Acá corré tus tests (tests/*)."
-
+# Housekeeping -----------------------------------------------------------------
+.PHONY: clean
 clean:
-	rm -rf build $(PROJECT)
+	rm -rf $(BUILD_DIR)
 
+# Include auto-generated dependency files --------------------------------------
+-include $(DEPS)
