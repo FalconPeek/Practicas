@@ -1,0 +1,11 @@
+#ignorar el build, los parciales pdf y el .vscode
+#Quiero ignorar la carpeta build
+build/
+*.pdf
+.vscode/
+*.aux
+*.log
+*.out
+*.toc
+*.o
+*.dat

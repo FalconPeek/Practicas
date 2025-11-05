@@ -1,76 +1,96 @@
-SHELL := /bin/sh
+# =========================
+# Makefile simple funcional
+# =========================
+# Uso:
+#   make run
+#       -> compila y ejecuta main.c
+#
+#   make ./archivo.c
+#       -> compila y ejecuta ./archivo.c
+#
+#   make clean
+#       -> borra la carpeta build/
+#
+# Estructura de build:
+#   build/obj/*.o   objetos compilados
+#   build/bin/*     ejecutables generados
+#
+# Requisitos:
+#   - cc / gcc disponible en WSL
+#   - este makefile guardado con tabs en las recetas
 
-# ==== User configuration =====================================================
-CC       ?= gcc
-CSTD     ?= c11
-CFLAGS   ?= -std=$(CSTD) -Wall -Wextra -Wpedantic -g
-CPPFLAGS ?=
-LDFLAGS  ?=
-LDLIBS   ?=
+CC      := cc
+CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -O2
+BUILD   := build
+OBJDIR  := $(BUILD)/obj
+BINDIR  := $(BUILD)/bin
 
-# ==== Internal configuration =================================================
-BUILD_DIR := build
-OBJ_DIR   := $(BUILD_DIR)/obj
-BIN_DIR   := $(BUILD_DIR)/bin
+# Todos los .c que existan en la carpeta actual
+SRCS    := $(wildcard *.c)
 
-# Header search paths (all project directories except the build folder)
-INC_DIRS_RAW != find . -type d -not -path './$(BUILD_DIR)*' -not -path './.*'
-INC_DIRS     := $(patsubst ./%,%,$(INC_DIRS_RAW))
-CPPFLAGS     += $(addprefix -I,$(INC_DIRS))
+# Módulos = todos los .c que no se llamen main.c (para poder linkear funciones comunes)
+MODULES := $(filter-out %main.c,$(SRCS))
 
-# Gather module sources (translation units without a main function)
-MODULE_SRC_RAW != sh -c 'find . -type f -name "*.c" -not -path "./$(BUILD_DIR)/*" -not -path "./.*" -print | while read -r file; do if ! grep -Eq "int[[:space:]]*main" "$$file"; then printf "%s\n" "$$file"; fi; done'
-MODULE_SRC := $(patsubst ./%,%,$(MODULE_SRC_RAW))
-MODULE_OBJ := $(MODULE_SRC:%.c=$(OBJ_DIR)/%.o)
-
-.SECONDARY:
-
-# Dependency files generated with -MMD -MP
-DEPS := $(MODULE_OBJ:.o=.d)
-DEPS += $(shell find $(OBJ_DIR) -type f -name '*.d' 2>/dev/null)
-
-# Default target ----------------------------------------------------------------
+# Target por defecto si hacés sólo "make"
 .DEFAULT_GOAL := help
 
-.PHONY: help
 help:
-	@echo "Usage:"
-	@echo "  make path/to/file.c  # build and run the given translation unit"
-	@echo "  make modules         # pre-build every reusable module"
-	@echo "  make clean           # delete the build directory"
+	@echo "Comandos disponibles:"
+	@echo "  make run                -> compila y ejecuta main.c"
+	@echo "  make ./archivo.c        -> compila y ejecuta ese .c como main"
+	@echo "  make clean              -> borra build/"
+	@echo ""
+	@echo "Ejemplos:"
+	@echo "  make run"
+	@echo "  make ./main.c"
+	@echo "  make ./otro_main.c"
 
-# Build every reusable module ---------------------------------------------------
-.PHONY: modules
-modules: $(MODULE_OBJ)
+# ------------------------------
+# make run  -> usa main.c
+# ------------------------------
+run:
+	@$(MAKE) --no-print-directory _exec FILE="main.c"
 
-# Generic compilation rule ------------------------------------------------------
-$(OBJ_DIR)/%.o: %.c
-	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+# -----------------------------------------
+# make ./archivo.c  -> usa ese archivo .c
+# Este patrón capta cualquier objetivo que termine en .c
+# Ej: make ./test.c  o make demo.c
+# -----------------------------------------
+%.c:
+	@$(MAKE) --no-print-directory _exec FILE="$@"
 
-# Link rule: requested program + modules ---------------------------------------
-$(BIN_DIR)/%: $(OBJ_DIR)/%.o $(MODULE_OBJ)
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-# Allow `make something.c` ------------------------------------------------------
-REQUESTED_SOURCES := $(filter %.c,$(MAKECMDGOALS))
-RUN_PROG = $(patsubst %.c,%,$(patsubst ./%,%,$(SRC)))
-
-.PHONY: $(REQUESTED_SOURCES)
-$(REQUESTED_SOURCES):
-	@$(MAKE) --no-print-directory __run SRC=$@
-
-# Internal runner ---------------------------------------------------------------
-.PHONY: __run
-__run: $(BIN_DIR)/$(RUN_PROG)
-	@echo "\n>> Running $(patsubst ./%,%,$(SRC))"
-	./$(BIN_DIR)/$(RUN_PROG)
-
-# Housekeeping -----------------------------------------------------------------
-.PHONY: clean
+# ------------------------------
+# clean  -> rm -rf build
+# ------------------------------
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD)
 
-# Include auto-generated dependency files --------------------------------------
--include $(DEPS)
+# -----------------------------------------
+# _exec:
+#   1. Crea build/
+#   2. Compila todos los módulos comunes (los .c que NO sean el main elegido)
+#   3. Compila el main elegido
+#   4. Linkea todo en un binario único
+#   5. Ejecuta el binario
+# -----------------------------------------
+_exec:
+	@set -e; \
+	mkdir -p "$(OBJDIR)" "$(BINDIR)"; \
+	echo "[build] $$FILE"; \
+	mods=""; \
+	for f in $(MODULES); do \
+		if [ "$$f" != "$$FILE" ]; then \
+			obj="$(OBJDIR)/$${f%.c}.o"; \
+			echo "  CC $$f -> $$obj"; \
+			$(CC) $(CFLAGS) -c "$$f" -o "$$obj"; \
+			mods="$$mods $$obj"; \
+		fi; \
+	done; \
+	mainobj="$(OBJDIR)/$${FILE%.c}.o"; \
+	echo "  CC $$FILE -> $$mainobj"; \
+	$(CC) $(CFLAGS) -c "$$FILE" -o "$$mainobj"; \
+	bin="$(BINDIR)/$${FILE%.c}"; \
+	echo "  LD $$bin"; \
+	$(CC) "$$mainobj" $$mods -o "$$bin"; \
+	echo "[run] $$bin"; \
+	"$$bin"
