@@ -1,7 +1,13 @@
 {
-    "C_Cpp.errorSquiggles": "disabled",
     "editor.hover.enabled": false,
     "files.associations": {
-        "stdbool.h": "c"
-    }
+        "stdbool.h": "c",
+        "leerarchivo.h": "c",
+        "grabararchivo.h": "c"
+        "corteControl.c": "c"
+    },
+    "C_Cpp.codeAnalysis.clangTidy.checks.disabled": [
+        "clang-diagnostic-error"
+    ],
+    "C_Cpp.errorSquiggles": "disabled",
 }

@@ -1,15 +1,18 @@
-//#include <stdio.h>
-//#include <stdbool.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <windows.h>
 
-//Variables Globales
-#define MAX_STG 25
-typedef char tString[MAX_STG];
+#include "GrabarArchivo.h"
+#include "LeerArchivo.h"
 
-#include "app.c"
+int main(){
+	inicializarG();
+	procesarG();
+	finalizarG();
 
+    inicializarL();
+    procesarL();
+    finalizarL();
 
-
-int main(void){
-    runApp();
-    return 0;
+	return 0;
 }
