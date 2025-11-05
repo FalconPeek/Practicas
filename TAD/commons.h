@@ -1,8 +1,3 @@
-typedef struct {
-    int id;
-    char name[50];
-} Item;
-
 // Struct para Inventario.dat
 typedef struct {
     char fecha[9]; //fecha en formato AAAAMMDD (8 caracteres + '\0')
@@ -10,6 +5,7 @@ typedef struct {
     int salientes; // Cantidad de artículos salientes
 } Movimiento;
 
+void mostarHola();
 
 // Struct para Pedidos.dat
 typedef struct {

@@ -20,7 +20,7 @@
 #   - este makefile guardado con tabs en las recetas
 
 CC      := cc
-CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -O2
+CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -O2 -I./includes -I./TAD
 BUILD   := build
 OBJDIR  := $(BUILD)/obj
 BINDIR  := $(BUILD)/bin
@@ -93,4 +93,5 @@ _exec:
 	echo "  LD $$bin"; \
 	$(CC) "$$mainobj" $$mods -o "$$bin"; \
 	echo "[run] $$bin"; \
+	echo ----------------------------------------------------------------------------------------------------------------------; \
 	"$$bin"
